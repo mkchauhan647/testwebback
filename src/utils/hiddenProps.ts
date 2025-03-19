@@ -1,0 +1,30 @@
+export const hiddenProperties = ['deletedOn', 'deletedBy'];
+export const imageHiddenProperties = [
+  ...hiddenProperties,
+  'createdOn',
+];
+export const userHiddenProperties = [
+  ...hiddenProperties,
+  'password',
+  'email',
+  'emailVerified',
+  'verificationToken',
+  'realm',
+  'credentials',
+  'challenges',
+  'lastUpdated',
+  'profile',
+  'externalId',
+  'role',
+  'roles',
+  'roleMappings',
+  'groups',
+  'groupMappings',
+  'permissions',
+  'settings',
+  'created',
+  'modified',
+  'deleted',
+  'deletedOn',
+  'deletedBy',
+];
