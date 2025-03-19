@@ -80,6 +80,31 @@ export class UserController {
     return this.userRepository.find(filter);
   }
 
+
+  @authenticate('jwt')
+  @authorize({allowedRoles: ['admin', 'superadmin']})
+  @get('/users/tenantid/{tenantId}')
+  @response(200, {
+    description: 'Array of User model instances',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: getModelSchemaRef(User, {includeRelations: true}),
+        },
+      },
+    },
+  })
+  async findByTenantId(
+    @param.path.number('tenantid') tenantId: number,
+    @param.filter(User) filter?: Filter<User>,
+  ): Promise<User[]> {
+    return this.userRepository.find({where: {tenantId: tenantId}});
+  }
+
+
+
+
   @patch('/users')
   @response(200, {
     description: 'User PATCH success count',

@@ -207,6 +207,11 @@ export class TableMetadataController {
   private async createDynamicTable(tableName: string, format: object) {
     const columns = this.generateColumnDefinitions(format);
 
+    // Ensure ID column is always included
+    // columns.unshift("id INT AUTO_INCREMENT PRIMARY KEY");
+    columns.unshift("id SERIAL PRIMARY KEY");
+
+
     console.log("cols", columns);
 
 
@@ -290,8 +295,15 @@ export class TableMetadataController {
       `SELECT * FROM ${this.sanitizeTableName(tableName)}`,
     );
 
+    // console.log("rowData", rawData);
+
+
+    console.log("metadata", metadata.dataFormat);
+
+    const dataFormat = {id: "number", ...metadata.dataFormat}
+
     return rawData.map((row: any) =>
-      this.transformToNestedFormat(row, metadata.dataFormat)
+      this.transformToNestedFormat(row, dataFormat)
     );
   }
 

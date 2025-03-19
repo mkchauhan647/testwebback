@@ -224,7 +224,8 @@ export class AuthController {
 
 
     if (userExist) {
-      return JSON.stringify({message: "User Already Exist ! Try another Email."})
+      // return JSON.stringify({message: "User Already Exist ! Try another Email."})
+      throw new HttpErrors.Conflict("User Already Exist ! Try another Email.")
     }
 
     let roleType;

@@ -34,6 +34,12 @@ export class TableMetadata extends UserModifiableEntity {
   })
   fileSize?: string;
 
+  // @belongsTo(() => User, {name: 'user', keyTo: 'id'})
+  // userId: number;
+
+  // @belongsTo(() => Tenant, {name: 'tenant', keyTo: 'id'})
+  // tenantId?: number;
+
   constructor(data?: Partial<TableMetadata>) {
     super(data);
   }
