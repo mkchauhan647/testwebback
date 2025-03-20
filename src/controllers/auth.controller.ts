@@ -317,8 +317,19 @@ export class AuthController {
     content: {'application/json': {schema: CountSchema}},
   })
   async count(
-    @param.where(Auth) where?: Where<Auth>,
+    // @inject(RestBindings.Http.REQUEST) request: Request,
+    // @inject('tenantId') tenantId: number,
+    @param.where(Auth) where?: Where<Auth>
+
   ): Promise<Count> {
+
+
+    // const ctx = getMiddlewareContext(request);
+    // const tenatid = await ctx?.get('tenantId');
+    // console.log(tenatid);
+    // console.log(tenantId);
+
+
     return this.authRepository.count(where);
   }
 

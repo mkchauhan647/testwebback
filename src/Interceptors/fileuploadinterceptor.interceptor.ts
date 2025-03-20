@@ -33,6 +33,7 @@ export class FileuploadinterceptorInterceptor implements Provider<Interceptor> {
   value() {
     // return this.intercept.bind(this);
     const handler: ExpressRequestHandler = upload.single('file');
+    // const handler:ExpressRequestHandler = upload.array('file', 10);
     return toInterceptor(handler);
   }
 

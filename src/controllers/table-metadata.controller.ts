@@ -85,13 +85,25 @@ export class TableMetadataController {
         throw new Error('Invalid table name');
       }
 
+      const table = await this.tableMetadataRepository.findOne({where: {tableName}});
+      if (!table) {
+        throw new Error('Table not found');
+      }
+
+
       const query = `DROP TABLE IF EXISTS ${tableName}`;
       await this.tableMetadataRepository.dataSource.execute(query); // Execute raw SQL query
       await this.tableMetadataRepository.deleteAll({tableName}); // Delete metadata
 
       // also delete the file upload to s3 bucket
 
-      this.s3Service.deleteFile(tableName);
+      // const key = `csv-files/${tableName}.csv`;
+      const key = `csv-files/${table.s3Url.split('/').slice(-1)[0]}`;
+
+      console.log("keyinsidelete", key);
+
+
+      this.s3Service.deleteFile(key);
 
       return response.status(200).send({message: `Table ${tableName} deleted successfully`});
     } catch (error) {
@@ -175,7 +187,9 @@ export class TableMetadataController {
         fields.dataFormat,
       );
 
-      const s3Url = await this.s3Service.uploadFile(tempPath, fields.tableName);
+      const key = `csv-files/${Date.now()}-${fields.tableName}.csv`;
+
+      const s3Url = await this.s3Service.uploadFile(tempPath, key);
 
       console.log("dataformat", dataFormat);
       console.log("sanitizedData", sanitizedData);

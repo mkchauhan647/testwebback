@@ -16,6 +16,7 @@ import {AuthorizationComponent, AuthorizationTags} from '@loopback/authorization
 import multer from 'multer';
 import {RoleAuthorizer} from './authorizers/user.authorizer';
 import {FILE_UPLOAD_SERVICE, STORAGE_LOCATION} from './keys';
+import {TenantMiddlewareProvider} from './providers/tenant.provider';
 import {CsvProcessorService} from './services';
 import {S3Service} from './services/s3-service.service';
 import {JWTAuthenticationStrategy} from './strategies/jwt-auth.strategy';
@@ -66,6 +67,9 @@ export class GovBackendApplication extends BootMixin(
     this.bind('authorizationProviders.role-auth-provider')
       .toProvider(RoleAuthorizer)
       .tag(AuthorizationTags.AUTHORIZER);
+
+    this.middleware(TenantMiddlewareProvider);
+
 
 
 

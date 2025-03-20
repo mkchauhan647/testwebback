@@ -20,13 +20,14 @@ export class S3Service {
     });
   }
 
-  async uploadFile(filePath: string, tableName: string): Promise<string> {
+  async uploadFile(filePath: string, key: string): Promise<string> {
     const fileContent = readFileSync(filePath);
 
 
     const params = {
       Bucket: this.s3Config.bucket,
-      Key: `csv-files/${tableName}.csv`,
+      // Key: `csv-files/${tableName}.csv`,
+      Key: key,
       Body: fileContent,
     };
 
@@ -34,10 +35,11 @@ export class S3Service {
     return result.Location;
   }
 
-  async deleteFile(tableName: string): Promise<void> {
+  async deleteFile(key: string): Promise<void> {
     const params = {
       Bucket: this.s3Config.bucket,
-      Key: `csv-files/${tableName}.csv`,
+      // Key: `csv-files/${tableName}.csv`,
+      Key: key
     };
 
     await this.s3.deleteObject(params).promise();
