@@ -8,6 +8,7 @@ import {
   get,
   HttpErrors,
   param,
+  patch,
   post,
   Request,
   requestBody,
@@ -134,8 +135,14 @@ export class TableMetadataController {
       const file = request.file;
       let fields = {
         tableName: request.body.tableName,
-        dataFormat: JSON.parse(request.body.dataFormat),
+        dataFormat: JSON.parse(request.body.dataFormat || 'null'),
       };
+
+      if (!fields.dataFormat) {
+
+        console.log("its null");
+
+      }
 
 
       const fileSize = file.size;
@@ -196,7 +203,7 @@ export class TableMetadataController {
 
 
       const metadata = await this.tableMetadataRepository.create({
-        tableName: fields.tableName,
+        tableName: fields.tableName.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, ''),
         dataFormat,
         s3Url: s3Url,
         fileSize: fileSize.toString(),
@@ -252,14 +259,14 @@ export class TableMetadataController {
   }
 
   private sanitizeTableName(name: string): string {
-    return `"${name.replace(/[^a-zA-Z0-9_]/g, '')}"`;
+    return `"${name.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, '')}"`;
   }
 
   private sanitizeColumnName(name: string): string {
     return `"${name}"`;
   }
 
-  private async insertDataIntoTable(tableName: string, data: object[]) {
+  private async insertDataIntoTable(tableName: string, data: object[], operationType?: string) {
     if (!data.length) {
       throw new Error('No data provided for insertion');
     }
@@ -274,16 +281,64 @@ export class TableMetadataController {
       return `(${rowPlaceholders.join(', ')})`;
     });
 
-    // Final query
-    const query = `
+    if (operationType == 'replace') {
+
+      // empty the table first
+      // const query = `TRUNCATE TABLE ${this.sanitizeTableName(tableName)}`;
+      // and also reset the id sequence
+      const query = `TRUNCATE TABLE ${this.sanitizeTableName(tableName)} RESTART IDENTITY CASCADE`;
+      await this.tableMetadataRepository.dataSource.execute(query);
+      // and then insert the new data
+      const query1 = `
       INSERT INTO ${this.sanitizeTableName(tableName)}
       (${columns.map(c => this.sanitizeColumnName(c)).join(', ')})
       VALUES ${valuePlaceholders.join(', ')}
     `;
 
-    // Execute the query with parameterized values
-    await this.tableMetadataRepository.dataSource.execute(query, values);
+      await this.tableMetadataRepository.dataSource.execute(query1, values);
+
+    }
+    else {
+
+      // Final query
+      const query = `
+    INSERT INTO ${this.sanitizeTableName(tableName)}
+    (${columns.map(c => this.sanitizeColumnName(c)).join(', ')})
+    VALUES ${valuePlaceholders.join(', ')}
+  `;
+
+      // Execute the query with parameterized values
+      await this.tableMetadataRepository.dataSource.execute(query, values);
+
+    }
+
   }
+
+
+  @get('/table-metadata/{tableName}', {
+    responses: {
+      '200': {
+        description: 'Table metadata',
+        content: {
+          'application/json': {schema: {'x-ts-type': TableMetadata}},
+        },
+      },
+    },
+  })
+  async getTableMetadata(
+    @param.path.string('tableName') tableName: string,
+  ): Promise<TableMetadata> {
+
+    const metadata = await this.tableMetadataRepository.findOne({where: {tableName}});
+
+    if (!metadata) {
+      throw new HttpErrors.NotFound('Table not found');
+    }
+    return metadata;
+  }
+
+
+
 
 
 
@@ -297,9 +352,23 @@ export class TableMetadataController {
   async getTableData(
     @param.path.string('tableName') tableName: string,
   ): Promise<object[]> {
+
+    // const sanitizeTableName = this.sanitizeTableName(tableName);
+
+    if (!tableName) {
+      throw new HttpErrors.BadRequest('Table name is required');
+    }
+
+    const sanitizeTableName = tableName.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, '')
+
+    console.log("sanitizetable", sanitizeTableName);
+
     const metadata = await this.tableMetadataRepository.findOne({
-      where: {tableName},
+      where: {tableName: sanitizeTableName},
     });
+
+    console.log("metadata", metadata);
+
 
     if (!metadata) {
       throw new HttpErrors.NotFound('Table not found');
@@ -345,6 +414,170 @@ export class TableMetadataController {
     const keys = Object.keys(row);
     return keys.find(k => k.replace(/_/g, '') === nestedKey.replace(/_/g, '')) ?? null;
   }
+
+
+
+  @patch('/table-metadata/{tableName}', {
+    responses: {
+      '200': {
+        description: 'Table Metadata Update',
+        content: {'application/json': {schema: {message: 'string'}}},
+      },
+      '400': {
+        description: 'Invalid Table Name or Missing Data',
+        content: {'application/json': {schema: {message: 'string'}}},
+      },
+    },
+  })
+  async updateTableMetadata(
+    @requestBody.file()
+    @param.path.string('tableName') tableName: string,
+    request: any, // Request body for the update
+  ): Promise<object> {
+
+    try {
+      // Find existing metadata based on tableName
+      const tableMetadata = await this.tableMetadataRepository.findOne({where: {tableName}});
+
+      console.log("tablefound")
+
+      // store tablemetadata into new var to use it later
+      // const tableMetadataOld = tableMetadata as TableMetadata;
+      const tableMetadataOld = JSON.parse(JSON.stringify(tableMetadata));
+
+
+      if (!tableMetadata) {
+        throw new HttpErrors.NotFound('Table not found');
+      }
+
+      const updates = request;
+
+
+      if (updates.body.tableName && updates.body.tableName !== tableMetadata.tableName) {
+        // Check if new tableName is valid and not already in use
+
+        console.log("table name modified")
+
+
+
+        const existingTable = await this.tableMetadataRepository.findOne({where: {tableName: updates.tableName}});
+        if (existingTable) {
+          throw new HttpErrors.Conflict('Table with the new name already exists');
+        }
+        // Update tableName in the metadata (sanitize before saving)
+        tableMetadata.tableName = updates.tableName.trim().replace(/[^a-zA-Z0-9_]/g, '');
+      }
+
+
+
+      // if (updates.dataFormat) {
+      //   // Update the dataFormat in the metadata
+      //   tableMetadata.dataFormat = updates.dataFormat;
+      // }
+
+      if (updates.file) {
+        // Process the new file, save it to temporary storage and upload to S3
+        const file = updates.file;
+        const tempPath = join(tmpdir(), `${Date.now()}.csv`);
+
+        if (!file.buffer) {
+          throw new Error('File buffer is undefined');
+        }
+        writeFileSync(tempPath, file.buffer);
+
+        // Process CSV and upload to S3
+        const {sanitizedData, dataFormat} = await this.csvProcessor.processCsv(tempPath);
+        const key = `csv-files/${Date.now()}-${tableMetadata.tableName}.csv`;
+        const s3Url = await this.s3Service.uploadFile(tempPath, key);
+
+        console.log("s3url", s3Url);
+
+
+        console.log("format", dataFormat);
+
+        // Update metadata with the new file information
+        tableMetadata.s3Url = s3Url;
+        tableMetadata.fileSize = file.size.toString();
+        tableMetadata.dataFormat = dataFormat;
+
+        // Update dynamic table with new data (assuming this step is needed)
+        // await this.createDynamicTable(tableMetadata.tableName, dataFormat);
+
+        console.log("oldformat", tableMetadataOld.dataFormat);
+        console.log("newformat", tableMetadata.dataFormat);
+
+        console.log("isEqual", await
+          this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat)
+        )
+
+
+        // let operationType = 'replace';
+
+        if (tableMetadata.tableName !== tableMetadataOld.tableName || !(await this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat))) {
+          console.log("table name or data format modified")
+
+          // drop the table and create new one
+          await this.tableMetadataRepository.dataSource.execute(`DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`);
+
+
+          await this.createDynamicTable(tableMetadata.tableName, dataFormat);
+        }
+        await this.insertDataIntoTable(tableMetadata.tableName, sanitizedData, 'replace');
+
+        console.log("file modified")
+
+      }
+
+      // Save the updated metadata to the repository
+      const updatedMetadata = await this.tableMetadataRepository.save(tableMetadata);
+
+      if (updatedMetadata) {
+        // Delete the old file from S3 and temporary storage and delete the existing table
+        const key = `csv-files/${tableMetadataOld.s3Url.split('/').slice(-1)[0]}`;
+
+
+        console.log("old", tableMetadataOld.s3Url.split('/').slice(-1)[0]);
+        console.log("new", updatedMetadata.s3Url.split('/').slice
+          (-1)[0]);
+
+
+        if (tableMetadata.s3Url.split('/').slice(-1)[0] !== tableMetadataOld.s3Url.split('/').slice(-1)[0]) {
+          console.log("existing file deleted")
+          await this.s3Service.deleteFile(key);
+        }
+        // if (tableMetadata.tableName !== tableMetadataOld.tableName) {
+        //   console.log("existing table deleted")
+        //   const query = `DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`;
+        //   await this.tableMetadataRepository.dataSource.execute(query); // Execute raw SQL query
+        // }
+      }
+
+      console.log("is it okay?")
+
+      return this.response.status(200).send({message: 'Table metadata updated successfully', metadata: updatedMetadata});
+    } catch (error) {
+      return this.response.status(400).send({message: error.message});
+    }
+  }
+
+
+  async isEqual(obj1: any, obj2: any):
+    Promise<boolean> {
+    if (typeof obj1 !== "object" || typeof obj2 !== "object" || obj1 === null || obj2 === null) {
+      return obj1 === obj2;
+    }
+
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+
+    if (keys1.length !== keys2.length) return false; // Different number of keys
+
+    return keys1.every(key =>
+      keys2.includes(key) && this.isEqual(obj1[key], obj2[key])
+    );
+  };
+
+
 
 
 

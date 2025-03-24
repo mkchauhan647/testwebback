@@ -11,6 +11,10 @@ export class TableMetadataService {
   async createTableBasedOnMetadata(tableMetadata: TableMetadata): Promise<void> {
     const {tableName, dataFormat} = tableMetadata;
 
+    if (!tableName || !dataFormat) {
+      throw new Error('Table name and data format are required to create a table');
+    }
+
     let createTableQuery = `CREATE TABLE IF NOT EXISTS ${tableName} (id SERIAL PRIMARY KEY`;
 
     for (const [column, subColumns] of Object.entries(dataFormat)) {

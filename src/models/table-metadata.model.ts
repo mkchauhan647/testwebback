@@ -19,9 +19,9 @@ export class TableMetadata extends UserModifiableEntity {
 
   @property({
     type: 'object',
-    required: true,
+    // required: true,
   })
-  dataFormat: object;
+  dataFormat?: object;
 
   @property({
     type: 'string',
