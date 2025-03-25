@@ -1,5 +1,7 @@
-import {injectable} from '@loopback/core';
+import {UserRepository} from '@loopback/authentication-jwt';
+import {inject, injectable} from '@loopback/core';
 import {repository} from '@loopback/repository';
+import {SecurityBindings, UserProfile} from '@loopback/security';
 import {compare, hash} from 'bcryptjs';
 import dotenv from 'dotenv';
 import * as jwt from 'jsonwebtoken';
@@ -22,6 +24,9 @@ const REFRESH_TOKEN_EXPIRY = '7d';
 export class AuthService {
   constructor(
     @repository(AuthRepository) public authUserRepo: AuthRepository,
+    @repository(UserRepository) public userRepo: UserRepository,
+    @inject(SecurityBindings.USER, {optional: true})
+    private currentUser?: UserProfile,
   ) { }
 
   // Hash password
@@ -45,6 +50,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user?.tenantId,
     }, ACCESS_TOKEN_SECRET, {
       expiresIn: ACCESS_TOKEN_EXPIRY,
     })
@@ -61,6 +67,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user?.tenantId,
     }, REFRESH_TOKEN_SECRET, {
       expiresIn: REFRESH_TOKEN_EXPIRY,
     })
@@ -77,4 +84,20 @@ export class AuthService {
     // return verifyAsync(token, REFRESH_TOKEN_SECRET);
     return jwt.verify(token, REFRESH_TOKEN_SECRET);
   }
+
+
+
+  async getTenantId(): Promise<string | null> {
+    if (this.currentUser && this.currentUser.tenantId) {
+      return this.currentUser.tenantId;
+    }
+
+    if (this.currentUser?.id) {
+      const user = await this.userRepo.findById(this.currentUser.id);
+      return user.tenantId || null;
+    }
+
+    return null;
+  }
+
 }

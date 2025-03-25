@@ -6,6 +6,8 @@ export * from './table-metadata.repository';
 export * from './tenant.repository';
 export * from './user.repository';
 
-export * from './footer.repository';
-export * from './file-management.repository';
 export * from './contact.repository';
+export * from './file-management.repository';
+export * from './footer.repository';
+export * from './summary.repository';
+

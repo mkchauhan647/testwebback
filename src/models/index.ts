@@ -8,6 +8,7 @@ export * from './contact.model';
 export * from './csvdata.model';
 export * from './file-management.model';
 export * from './footer.model';
+export * from './summary.model';
 export * from './table-metadata.model';
 export * from './user-modifiable-entity.model';
 
