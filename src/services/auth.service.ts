@@ -12,7 +12,7 @@ dotenv.config();
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'secretKey';
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'refreshSecret';
-const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_EXPIRY = '1d';
 const REFRESH_TOKEN_EXPIRY = '7d';
 // const ACCESS_TOKEN_EXPIRY: number | string = process.env.ACCESS_TOKEN_EXPIRY ?? '900s'; // 15 minutes
 // const REFRESH_TOKEN_EXPIRY: number | string = process.env.REFRESH_TOKEN_EXPIRY ?? '7d'; // 7 days

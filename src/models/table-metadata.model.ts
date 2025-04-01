@@ -18,6 +18,11 @@ export class TableMetadata extends UserModifiableEntity {
   tableName: string;
 
   @property({
+    type: "string",
+  })
+  title?: string;
+
+  @property({
     type: 'object',
     // required: true,
   })
@@ -33,6 +38,8 @@ export class TableMetadata extends UserModifiableEntity {
     type: 'string',
   })
   fileSize?: string;
+
+
 
   // @belongsTo(() => User, {name: 'user', keyTo: 'id'})
   // userId: number;

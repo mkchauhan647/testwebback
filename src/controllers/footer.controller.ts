@@ -31,27 +31,41 @@ export class FooterController {
     req: any
   ): Promise<Footer | any> {
 
-    const file = req.file;
+    const files = req.files;
+
+
+    // console.log("files", req.files, req.logoFile1, req.logoFile2, req.logoFile3);
+
+    // console.log("body", req.body);
+
+    // return;
+
+
     const footer = JSON.parse(req.body.footer);
     // const footer = req.body.footer;
 
     console.log("file", footer);
 
-    if (!file) throw new Error('File is required');
+    if (!files) throw new Error('File is required');
+
+    let urls = [];
 
 
-    const tempPath = path.join(tmpdir(), `${Date.now()}-${file.originalname}`);
+    for (const file of files) {
+      const tempPath = path.join(tmpdir(), `${Date.now()}-${file.originalname}`);
 
-    writeFileSync(tempPath, file.buffer);
+      writeFileSync(tempPath, file.buffer);
 
-    const key = `uploaded-files/${Date.now()}-${file.originalname}`;
+      const key = `uploaded-files/${Date.now()}-${file.originalname}`;
 
-    const s3Url = await this.s3Service.uploadFile(tempPath, key);
+      const s3Url = await this.s3Service.uploadFile(tempPath, key);
+      urls.push(s3Url);
+    }
 
 
 
     return this.footerRepository.create({
-      ...footer, logoUrl: s3Url, tenantId: footer.tenantId || 1
+      ...footer, logo1: {name: req.body.logo1, url: urls[0]}, logo2: {name: req.body.logo2, url: urls[1]}, logo3: {name: req.body.logo3, url: urls[2]}, tenantId: footer.tenantId || 1
     });
   }
 
@@ -76,10 +90,13 @@ export class FooterController {
     req: any
   ): Promise<void> {
 
-    const file = req.file;
+    const files = req.files;
+
+    // console.log("files", files);
 
     let footer;
 
+    // console.log("body", req.body);
 
     const existingFooter = await this.footerRepository.findById(id);
 
@@ -87,49 +104,83 @@ export class FooterController {
       throw new Error("Footer not found");
     }
 
-    if (req.body.length > 0) {
+    if (req.body) {
 
       console.log("req.body", req.body);
 
-      footer = JSON.parse(req.body);
+      footer = req.body
+    }
+
+    if (!files) {
+      throw new Error('File is required');
     }
 
 
+    let urls = [];
 
-    if (file) {
+    for (const file of files) {
+
+      console.log("file", file);
+      if (file) {
+
+        const tempPath = path.join(tmpdir(), `${Date.now()}-${file?.originalname}`);
+
+        writeFileSync(tempPath, file.buffer);
+
+        const key = `uploaded-files/${Date.now()}-${file.originalname}`;
+
+        const s3Url = await this.s3Service.uploadFile(tempPath, key);
+
+        console.log("s3Url", s3Url);
 
 
+        // if (!footer) {
 
-      const tempPath = path.join(tmpdir(), `${Date.now()}-${file.originalname}`);
+        let updateKey = file.fieldname === 'logoFile1' ? 'logo1' : file.fieldname === 'logoFile2' ? 'logo2' : 'logo3';
 
-      writeFileSync(tempPath, file.buffer);
-
-      const key = `uploaded-files/${Date.now()}-${file.originalname}`;
-
-      const s3Url = await this.s3Service.uploadFile(tempPath, key);
-
-
-      if (!footer) {
-
-        await this.footerRepository.updateById(id, {logoUrl: s3Url});
-
-
-        // return;
-      } else {
         await this.footerRepository.updateById(id, {
-          ...footer, logoUrl: s3Url
+          [updateKey]: {
+            name: file.originalname,
+            url: s3Url
+          }
         });
 
+
+        // return;
+        // } else {
+        //   await this.footerRepository.updateById(id, {
+        //     ...footer, logoUrl: s3Url
+        //   });
+
+        //   // return;
+        // }
+
+        // let existingKey = `uploaded-files/${existingFooter[fileKey] as {name: string, url: string} ?.url?.split('/').pop()}`;
+        let existingKey;
+        if (file.fieldname === 'logoFile1') {
+          existingKey = `uploaded-files/${existingFooter.logo1?.url?.split('/').pop()}`;
+        }
+        else if (file.fieldname === 'logoFile2') {
+          existingKey = `uploaded-files/${existingFooter.logo2?.url?.split('/').pop()}`;
+        }
+        else if (file.fieldname === 'logoFile3') {
+          existingKey = `uploaded-files/${existingFooter.logo3?.url?.split('/').pop()}`;
+        }
+        console.log("existingKey", existingKey);
+
+        if (existingKey) {
+          await this.s3Service.deleteFile(existingKey);
+        }
         // return;
       }
-
-      let existingKey = `uploaded-files/${existingFooter.logoUrl?.split('/').pop()}`;
-
-      await this.s3Service.deleteFile(existingKey);
-      return;
     }
 
-    await this.footerRepository.updateById(id, footer);
+
+
+
+    if (footer) {
+      await this.footerRepository.updateById(id, footer);
+    }
   }
 
   // Delete a footer
@@ -139,19 +190,23 @@ export class FooterController {
 
     const footer = await this.footerRepository.findById(id);
 
-    console.log("logourl", footer.logoUrl);
+    // console.log("logourl", footer.logoUrl);
 
     if (!footer) {
       throw new Error("File not found");
     }
 
-    const filename = footer?.logoUrl?.split('/').pop();
-
-    const key = `uploaded-files/${filename}`;
-
     try {
-      await this.s3Service.deleteFile(key);
 
+
+      for (const logo of [footer.logo1, footer.logo2, footer.logo3]) {
+        if (logo) {
+          const filename = logo?.url?.split('/').pop();
+          const key = `uploaded-files/${filename}`;
+          await this.s3Service.deleteFile(key);
+
+        }
+      };
       await this.footerRepository.deleteById(id);
     }
     catch (error) {

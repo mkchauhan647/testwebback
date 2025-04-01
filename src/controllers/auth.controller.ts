@@ -151,9 +151,64 @@ export class AuthController {
       accessToken: token,
       refreshToken: refreshToken,
       // expiresIn: '1m'
-      expiresIn: '15m'
+      expiresIn: '1d'
     }
   }
+
+
+  @authenticate('jwt')
+  @post('/auth/logout')
+  @response(200, {
+    content: {
+      "application/json": {
+        schema: {
+          type: 'object',
+          properties: {
+            message: {type: 'string'}
+          }
+        }
+      }
+    }
+  })
+  async logout(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              refreshToken: {type: 'string'}
+            },
+            required: ['refreshToken']
+          }
+        }
+      }
+    })
+    data: {refreshToken: string}
+  ): Promise<{message: string} | string> {
+
+    if (!data.refreshToken) {
+      throw new HttpErrors.BadRequest("Refresh Token is required")
+    }
+
+
+    const token = await this.refreshTokenRepository.findOne({
+      where: {
+        token: data.refreshToken
+      }
+    })
+
+    if (!token) {
+      throw new HttpErrors.Unauthorized("Invalid Token")
+    }
+
+    await this.refreshTokenRepository.deleteById(token.id);
+
+    return {
+      message: "Logged Out Successfully"
+    }
+  }
+
 
 
   @authenticate('jwt')
@@ -307,6 +362,91 @@ export class AuthController {
       // return JSON.stringify(error.message);
       throw new HttpErrors.Unauthorized("Invalid Token")
 
+    }
+  }
+
+
+  @post('/auth/refresh-token')
+  @response(200, {
+    description: 'Auth model instance',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            accessToken: {type: 'string'},
+            refreshToken: {type: 'string'},
+            expiresIn: {type: 'string'}
+          }
+        }
+      }
+    },
+  })
+  async refreshToken(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              refreshToken: {type: 'string'}
+            },
+            required: ['refreshToken']
+          }
+        }
+      }
+    })
+    data: {refreshToken: string}
+  ): Promise<any | string> {
+
+
+
+
+    const token = await this.refreshTokenRepository.findOne({
+      where: {
+        token: data.refreshToken
+      }
+    })
+
+    if (!token) {
+      throw new HttpErrors.Unauthorized("Invalid Token")
+    }
+
+
+
+    // verify refresh token
+
+    const isValid = await this.authService.verifyRefreshToken(data.refreshToken);
+
+    if (!isValid) {
+
+
+      await this.refreshTokenRepository.deleteAll({
+        token: data.refreshToken
+      })
+      throw new HttpErrors.Unauthorized("Invalid Token")
+    }
+
+    const user = await this.userRepository.findById(token.userId);
+
+    if (!user) {
+      throw new HttpErrors.NotFound("User Not Found")
+    }
+
+
+
+    const newAccessToken = await this.authService.generateAccessToken(user);
+
+    const newRefreshToken = await this.authService.generateRefreshToken(user);
+
+    await this.refreshTokenRepository.updateById(token.id, {
+      token: newRefreshToken
+    });
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: '1d'
     }
   }
 

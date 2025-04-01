@@ -132,10 +132,13 @@ export class TableMetadataController {
 
     try {
       // Extract file and fields data
-      const file = request.file;
+      // const file = request.file;
+      const files = request.files;
+      const file = Array.isArray(files) ? files[0] : null;
       let fields = {
         tableName: request.body.tableName,
         dataFormat: JSON.parse(request.body.dataFormat || 'null'),
+        title: request.body.title || null,
       };
 
       if (!fields.dataFormat) {
@@ -207,6 +210,7 @@ export class TableMetadataController {
         dataFormat,
         s3Url: s3Url,
         fileSize: fileSize.toString(),
+        title: fields.title,
       });
 
       // const metadata = await this.tableMetadataRepository.findById(1);
@@ -441,8 +445,6 @@ export class TableMetadataController {
 
       console.log("tablefound")
 
-      // store tablemetadata into new var to use it later
-      // const tableMetadataOld = tableMetadata as TableMetadata;
       const tableMetadataOld = JSON.parse(JSON.stringify(tableMetadata));
 
 
@@ -451,6 +453,8 @@ export class TableMetadataController {
       }
 
       const updates = request;
+
+      console.log("body", request.body);
 
 
       if (updates.body.tableName && updates.body.tableName !== tableMetadata.tableName) {
@@ -470,65 +474,72 @@ export class TableMetadataController {
 
 
 
-      // if (updates.dataFormat) {
-      //   // Update the dataFormat in the metadata
-      //   tableMetadata.dataFormat = updates.dataFormat;
-      // }
+      if (updates?.body?.title) {
+        // Update the dataFormat in the metadata
+        tableMetadata.title = updates.body.title;
+      }
 
-      if (updates.file) {
+      if (updates.files) {
         // Process the new file, save it to temporary storage and upload to S3
-        const file = updates.file;
-        const tempPath = join(tmpdir(), `${Date.now()}.csv`);
+        const files = updates.files;
+        const file = Array.isArray(files) ? files[0] : null;
+        if (file) {
+          const tempPath = join(tmpdir(), `${Date.now()}.csv`);
 
-        if (!file.buffer) {
-          throw new Error('File buffer is undefined');
+          if (!file.buffer) {
+            throw new Error('File buffer is undefined');
+          }
+          writeFileSync(tempPath, file.buffer);
+
+          // Process CSV and upload to S3
+          const {sanitizedData, dataFormat} = await this.csvProcessor.processCsv(tempPath);
+          const key = `csv-files/${Date.now()}-${tableMetadata.tableName}.csv`;
+          const s3Url = await this.s3Service.uploadFile(tempPath, key);
+
+          console.log("s3url", s3Url);
+
+
+          console.log("format", dataFormat);
+
+          // Update metadata with the new file information
+          tableMetadata.s3Url = s3Url;
+          tableMetadata.fileSize = file.size.toString();
+          tableMetadata.dataFormat = dataFormat;
+
+          // Update dynamic table with new data (assuming this step is needed)
+          // await this.createDynamicTable(tableMetadata.tableName, dataFormat);
+
+          console.log("oldformat", tableMetadataOld.dataFormat);
+          console.log("newformat", tableMetadata.dataFormat);
+
+          console.log("isEqual", await
+            this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat)
+          )
+
+
+          // let operationType = 'replace';
+
+          if (tableMetadata.tableName !== tableMetadataOld.tableName || !(await this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat))) {
+            console.log("table name or data format modified")
+
+            // drop the table and create new one
+            await this.tableMetadataRepository.dataSource.execute(`DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`);
+
+
+            await this.createDynamicTable(tableMetadata.tableName, dataFormat);
+          }
+          await this.insertDataIntoTable(tableMetadata.tableName, sanitizedData, 'replace');
+
+          console.log("file modified")
+
         }
-        writeFileSync(tempPath, file.buffer);
-
-        // Process CSV and upload to S3
-        const {sanitizedData, dataFormat} = await this.csvProcessor.processCsv(tempPath);
-        const key = `csv-files/${Date.now()}-${tableMetadata.tableName}.csv`;
-        const s3Url = await this.s3Service.uploadFile(tempPath, key);
-
-        console.log("s3url", s3Url);
-
-
-        console.log("format", dataFormat);
-
-        // Update metadata with the new file information
-        tableMetadata.s3Url = s3Url;
-        tableMetadata.fileSize = file.size.toString();
-        tableMetadata.dataFormat = dataFormat;
-
-        // Update dynamic table with new data (assuming this step is needed)
-        // await this.createDynamicTable(tableMetadata.tableName, dataFormat);
-
-        console.log("oldformat", tableMetadataOld.dataFormat);
-        console.log("newformat", tableMetadata.dataFormat);
-
-        console.log("isEqual", await
-          this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat)
-        )
-
-
-        // let operationType = 'replace';
-
-        if (tableMetadata.tableName !== tableMetadataOld.tableName || !(await this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat))) {
-          console.log("table name or data format modified")
-
-          // drop the table and create new one
-          await this.tableMetadataRepository.dataSource.execute(`DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`);
-
-
-          await this.createDynamicTable(tableMetadata.tableName, dataFormat);
-        }
-        await this.insertDataIntoTable(tableMetadata.tableName, sanitizedData, 'replace');
-
-        console.log("file modified")
-
       }
 
       // Save the updated metadata to the repository
+
+      console.log("tableMetadata", tableMetadata);
+
+
       const updatedMetadata = await this.tableMetadataRepository.save(tableMetadata);
 
       if (updatedMetadata) {

@@ -28,11 +28,26 @@ export class Footer extends UserModifiableEntity {
   websiteName: string;
 
   @property({
-    type: 'string',
-    // required: true,
-    default: 'logo.jpg'
+    type: 'object',
   })
-  logoUrl?: string;
+  logo1?: {
+    url: string;
+    name: string;
+  };
+  @property({
+    type: 'object',
+  })
+  logo2?: {
+    url: string;
+    name: string;
+  };
+  @property({
+    type: 'object',
+  })
+  logo3?: {
+    url: string;
+    name: string;
+  };
 
   @property({
     type: 'string',
