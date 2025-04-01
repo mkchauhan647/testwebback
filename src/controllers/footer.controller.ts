@@ -59,13 +59,16 @@ export class FooterController {
       const key = `uploaded-files/${Date.now()}-${file.originalname}`;
 
       const s3Url = await this.s3Service.uploadFile(tempPath, key);
-      urls.push(s3Url);
+      urls.push({
+        name: file.originalname,
+        url: s3Url
+      });
     }
 
 
 
     return this.footerRepository.create({
-      ...footer, logo1: {name: req.body.logo1, url: urls[0]}, logo2: {name: req.body.logo2, url: urls[1]}, logo3: {name: req.body.logo3, url: urls[2]}, tenantId: footer.tenantId || 1
+      ...footer, logo1: {name: req.body?.logo1 || urls[0].name, url: urls[0]}, logo2: {name: req.body?.logo2 || urls[1].name, url: urls[1]}, logo3: {name: req.body?.logo3 || urls[2].name, url: urls[2]}, tenantId: footer.tenantId || 1
     });
   }
 
@@ -85,18 +88,14 @@ export class FooterController {
   @patch('/footers/{id}')
   async updateById(
     @param.path.number('id') id: number,
-    // @requestBody() footer: Footer,
     @requestBody.file()
     req: any
   ): Promise<void> {
 
     const files = req.files;
 
-    // console.log("files", files);
-
     let footer;
 
-    // console.log("body", req.body);
 
     const existingFooter = await this.footerRepository.findById(id);
 
@@ -171,7 +170,6 @@ export class FooterController {
         if (existingKey) {
           await this.s3Service.deleteFile(existingKey);
         }
-        // return;
       }
     }
 
@@ -190,7 +188,6 @@ export class FooterController {
 
     const footer = await this.footerRepository.findById(id);
 
-    // console.log("logourl", footer.logoUrl);
 
     if (!footer) {
       throw new Error("File not found");
