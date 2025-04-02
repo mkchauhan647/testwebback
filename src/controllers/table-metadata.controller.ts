@@ -434,49 +434,69 @@ export class TableMetadataController {
     },
   })
   async updateTableMetadata(
-    @requestBody.file()
+    @requestBody({
+      content: {
+        "multipart/form-data": {
+          'x-parser': 'stream',
+          schema: {
+            type: 'object',
+            properties: {
+              tableName: {type: 'string'},
+              title: {type: 'string'},
+              dataFormat: {type: 'object'},
+              file: {type: 'string', format: 'binary'},
+            },
+          },
+        },
+      }
+    })
+
     @param.path.string('tableName') tableName: string,
     request: any, // Request body for the update
-  ): Promise<object> {
+
+
+  ): Promise<object | any> {
 
     try {
       // Find existing metadata based on tableName
       const tableMetadata = await this.tableMetadataRepository.findOne({where: {tableName}});
 
-      console.log("tablefound")
+      console.log("tablefound", tableName)
 
-      const tableMetadataOld = JSON.parse(JSON.stringify(tableMetadata));
 
 
       if (!tableMetadata) {
         throw new HttpErrors.NotFound('Table not found');
       }
+      const tableMetadataOld = JSON.parse(JSON.stringify(tableMetadata));
 
       const updates = request;
 
       console.log("body", request.body);
 
 
-      if (updates.body.tableName && updates.body.tableName !== tableMetadata.tableName) {
+
+
+      if (updates?.body?.tableName && updates?.body?.tableName !== tableMetadata.tableName) {
         // Check if new tableName is valid and not already in use
 
         console.log("table name modified")
 
 
 
-        const existingTable = await this.tableMetadataRepository.findOne({where: {tableName: updates.tableName}});
+        const existingTable = await this.tableMetadataRepository.findOne({where: {tableName: updates.body.tableName}});
         if (existingTable) {
           throw new HttpErrors.Conflict('Table with the new name already exists');
         }
         // Update tableName in the metadata (sanitize before saving)
-        tableMetadata.tableName = updates.tableName.trim().replace(/[^a-zA-Z0-9_]/g, '');
+        tableMetadata.tableName = updates.body.tableName.trim().replace(/[^a-zA-Z0-9_]/g, '');
       }
 
 
 
       if (updates?.body?.title) {
         // Update the dataFormat in the metadata
-        tableMetadata.title = updates.body.title;
+        tableMetadata.title = updates.body?.title;
       }
 
       if (updates.files) {
