@@ -19,11 +19,24 @@ export class FileManagementController {
   // Upload a file
   @post('/files')
   async upload(
-    @requestBody.file()
+    // @requestBody.file()
+    @requestBody({
+      content: {
+        'multipart/form-data': {
+          'x-parser': 'stream',
+          schema: {
+            type: 'object',
+            properties: {
+              // file: {type: 'string', format: 'binary'},
+            },
+          },
+        },
+      }
+    })
     request: any
   ): Promise<FileManagement | any> {
-    const files = request.files;
-    const file = Array.isArray(files) ? files[0] : files;
+    const file = request.file;
+    // const file = Array.isArray(files) ? files[0] : files;
     if (!file) throw new Error('File is required');
 
     const tempPath = path.join(tmpdir(), `${Date.now()}-${file.originalname}`);

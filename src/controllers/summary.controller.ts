@@ -86,7 +86,7 @@ export class SummaryController {
               title: {type: 'string'},
               name: {type: 'string'},
               description: {type: 'string'},
-              file: {type: 'string', format: 'binary'},
+              // file: {type: 'string', format: 'binary'},
             }
           },
 
@@ -95,9 +95,9 @@ export class SummaryController {
     })
     req: any,
   ): Promise<Summary | any> {
-    // const file = this.req.file;
-    const files = this.req.files;
-    const file = Array.isArray(files) ? files[0] : null;
+    const file = this.req.file;
+    // const files = this.req.files;
+    // const file = Array.isArray(files) ? files[0] : null;
 
     const body = this.req.body;
 
@@ -140,8 +140,8 @@ export class SummaryController {
     @param.path.number('id') id: number,
   ): Promise<void> {
     // const file = this.req.files ? this.req.files[0] : null;
-    const files = this.req.files;
-    const file = Array.isArray(files) ? files[0] : null;
+    const file = this.req.file;
+    // const file = Array.isArray(files) ? files[0] : null;
     const body = this.req.body;
 
     console.log("file", file);

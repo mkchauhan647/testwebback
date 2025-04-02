@@ -324,6 +324,26 @@ export class AuthController {
     return user;
   }
 
+  @post('/auth/test')
+  @response(200, {
+    description: 'Auth model instance',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            message: {type: 'string'}
+          }
+        }
+      }
+    },
+  })
+  async test() {
+    return {
+      message: "Hello World"
+    }
+  }
+
 
   @post('/auth/verify')
   @response(200, {

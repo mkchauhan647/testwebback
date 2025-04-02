@@ -1,6 +1,5 @@
 import {authenticate} from '@loopback/authentication';
 import {UserRepository} from '@loopback/authentication-jwt';
-import {authorize} from '@loopback/authorization';
 import {inject} from '@loopback/core';
 import {repository} from '@loopback/repository';
 import {
@@ -123,7 +122,22 @@ export class TableMetadataController {
     },
   })
   async create(
-    @requestBody.file()
+    @requestBody({
+      content: {
+        'multipart/form-data': {
+          'x-parser': 'stream',
+          schema: {
+            type: 'object',
+            properties: {
+              tableName: {type: 'string'},
+              title: {type: 'string'},
+              dataFormat: {type: 'object'},
+              // file: {type: 'string', format: 'binary'},
+            },
+          },
+        },
+      }
+    })
     request: any,
   ): Promise<TableMetadata | any> {
 
@@ -132,9 +146,9 @@ export class TableMetadataController {
 
     try {
       // Extract file and fields data
-      // const file = request.file;
-      const files = request.files;
-      const file = Array.isArray(files) ? files[0] : null;
+      const file = request.file;
+      // const files = request.files;
+      // const file = Array.isArray(files) ? files[0] : null;
       let fields = {
         tableName: request.body.tableName,
         dataFormat: JSON.parse(request.body.dataFormat || 'null'),
@@ -355,7 +369,7 @@ export class TableMetadataController {
   @get('/table-metadata/{tableName}/data')
   async getTableData(
     @param.path.string('tableName') tableName: string,
-  ): Promise<object[]> {
+  ): Promise<object> {
 
     // const sanitizeTableName = this.sanitizeTableName(tableName);
 
@@ -389,9 +403,16 @@ export class TableMetadataController {
 
     const dataFormat = {id: "number", ...metadata.dataFormat}
 
-    return rawData.map((row: any) =>
-      this.transformToNestedFormat(row, dataFormat)
-    );
+    // return rawData.map((row: any) =>
+    //   this.transformToNestedFormat(row, dataFormat)
+    // );
+
+    return {
+      data: rawData.map((row: any) =>
+        this.transformToNestedFormat(row, dataFormat)
+      ),
+      metadata: metadata,
+    }
   }
 
 
@@ -444,12 +465,13 @@ export class TableMetadataController {
               tableName: {type: 'string'},
               title: {type: 'string'},
               dataFormat: {type: 'object'},
-              file: {type: 'string', format: 'binary'},
+              // file: {type: 'string', format: 'binary'},
             },
           },
         },
       }
     })
+    // @requestBody.file()
 
     @param.path.string('tableName') tableName: string,
     request: any, // Request body for the update
@@ -499,10 +521,11 @@ export class TableMetadataController {
         tableMetadata.title = updates.body?.title;
       }
 
-      if (updates.files) {
+      if (updates.file) {
         // Process the new file, save it to temporary storage and upload to S3
-        const files = updates.files;
-        const file = Array.isArray(files) ? files[0] : null;
+        // const files = updates.files;
+        // const file = Array.isArray(files) ? files[0] : null;
+        const file = updates.file;
         if (file) {
           const tempPath = join(tmpdir(), `${Date.now()}.csv`);
 
@@ -611,7 +634,7 @@ export class TableMetadataController {
 
 
 
-
+  @authenticate('jwt')
   @get('/test-endpoint',
     {
       responses: {
@@ -622,11 +645,11 @@ export class TableMetadataController {
       },
     }
   )
-  @authenticate('jwt')
-  @authorize({
-    allowedRoles: ['admin'],
-    // voters: ['authorizationProviders.roleAuthorizer'], // Match the provider binding name
-  })
+
+  // @authorize({
+  //   allowedRoles: ['admin'],
+  //   // voters: ['authorizationProviders.roleAuthorizer'], // Match the provider binding name
+  // })
   async testEndpoint() {
     return {message: 'Hello, world!'};
   }

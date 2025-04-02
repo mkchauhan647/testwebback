@@ -27,7 +27,25 @@ export class FooterController {
   // Add a new footer
   @post('/footers')
   async create(
-    @requestBody.file()
+    // @requestBody.file()
+    @requestBody({
+      content: {
+        'multipart/form-data': {
+          schema: {
+            type: 'object',
+            properties: {
+              footer: {
+                type: 'string',
+                format: 'json'
+              },
+              // logoFile1: {type: 'string', format: 'binary'},
+              // logoFile2: {type: 'string', format: 'binary'},
+              // logoFile3: {type: 'string', format: 'binary'},
+            },
+          },
+        },
+      }
+    })
     req: any
   ): Promise<Footer | any> {
 
