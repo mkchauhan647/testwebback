@@ -108,7 +108,7 @@ export class FooterController {
     @param.path.number('id') id: number,
     @requestBody.file()
     req: any
-  ): Promise<void> {
+  ): Promise<Footer> {
 
     const files = req.files;
 
@@ -197,6 +197,11 @@ export class FooterController {
     if (footer) {
       await this.footerRepository.updateById(id, footer);
     }
+
+
+    return this.footerRepository.findById(id);
+
+
   }
 
   // Delete a footer

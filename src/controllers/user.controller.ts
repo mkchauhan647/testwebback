@@ -1,5 +1,6 @@
 import {authenticate} from '@loopback/authentication';
 import {authorize} from '@loopback/authorization';
+import {inject} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -21,11 +22,14 @@ import {
 } from '@loopback/rest';
 import {User} from '../models';
 import {UserRepository} from '../repositories';
+import {AuthService} from '../services';
 
 export class UserController {
   constructor(
     @repository(UserRepository)
     public userRepository: UserRepository,
+    @inject('services.AuthService')
+    private authService: AuthService,
   ) { }
 
   @post('/users')
@@ -105,7 +109,8 @@ export class UserController {
 
 
 
-  @patch('/users')
+  @authenticate('jwt')
+  @patch('/adminonly-users')
   @response(200, {
     description: 'User PATCH success count',
     content: {'application/json': {schema: CountSchema}},
@@ -121,7 +126,10 @@ export class UserController {
     user: User,
     @param.where(User) where?: Where<User>,
   ): Promise<Count> {
-    return this.userRepository.updateAll(user, where);
+    // return this.userRepository.updateAll(user, where);
+    return {
+      count: 0,
+    }
   }
 
   @authenticate('jwt')
@@ -149,16 +157,19 @@ export class UserController {
   })
   async updateById(
     @param.path.number('id') id: number,
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(User, {partial: true}),
-        },
-      },
-    })
-    user: User,
-  ): Promise<void> {
+    // @requestBody({
+    //   content: {
+    //     'application/json': {
+    //       schema: getModelSchemaRef(User, {partial: true}),
+    //     },
+    //   },
+    // })
+    @requestBody()
+    user: Partial<User>,
+  ): Promise<Partial<User>> {
     await this.userRepository.updateById(id, user);
+    const updatedUser = await this.userRepository.findById(id);
+    return updatedUser;
   }
 
   @authenticate('jwt')
