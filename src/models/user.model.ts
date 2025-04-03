@@ -1,6 +1,7 @@
 import {belongsTo, model, property} from '@loopback/repository';
 import {hiddenProperties} from '../utils/hiddenProps';
 import {RoleType} from '../utils/types';
+import {Auth} from './auth.model';
 import {Tenant} from './tenant.model';
 import {UserModifiableEntity} from './user-modifiable-entity.model';
 
@@ -66,6 +67,8 @@ export class User extends UserModifiableEntity {
 
 export interface UserRelations {
   // describe navigational properties here
+  AuthUser?: Auth;
+  Tenant?: Tenant;
 }
 
 export type UserWithRelations = User & UserRelations;

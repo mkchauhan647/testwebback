@@ -112,7 +112,8 @@ export class AuthController {
     })
 
     if (!userExist) {
-      return JSON.stringify({message: "User Doesn't Exist"})
+      // return JSON.stringify({message: "User Doesn't Exist"})
+      throw new HttpErrors.NotFound("User Doesn't Exist")
     }
 
     const user_credential = await this.authRepository.findOne({
@@ -464,6 +465,7 @@ export class AuthController {
     });
 
     return {
+      user: user,
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
       expiresIn: '1d'

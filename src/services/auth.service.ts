@@ -29,6 +29,15 @@ export class AuthService {
     private currentUser?: UserProfile,
   ) { }
 
+
+  // generate password
+  async generatePassword(): Promise<string> {
+    const password = Math.random().toString(36).slice(-8);
+    return password;
+  }
+
+
+
   // Hash password
   async hashPassword(password: string): Promise<string> {
     return hash(password, 10);
