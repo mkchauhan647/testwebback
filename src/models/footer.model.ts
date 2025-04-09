@@ -6,9 +6,24 @@ import {UserModifiableEntity} from './user-modifiable-entity.model';
 
 @model({
   name: 'footers',
+  // settings: {
+  //   hiddenProperties: [...hiddenProperties]
+  // }
   settings: {
-    hiddenProperties: [...hiddenProperties]
+    hiddenProperties: [...hiddenProperties],
+    indexes: {
+      uniqueFooterPerLocale: {
+        keys: {
+          tenantId: 1,
+          locale: 1
+        },
+        options: {
+          unique: true
+        }
+      }
+    }
   }
+
 })
 export class Footer extends UserModifiableEntity {
 
@@ -68,6 +83,12 @@ export class Footer extends UserModifiableEntity {
     default: "© 2025 All rights reserved"
   })
   copyrightText?: string;
+
+  @property({
+    type: 'string',
+    default: "en",
+  })
+  locale?: string;
 
   @belongsTo(() => Tenant, {name: 'tenant', keyTo: "id"})
   tenantId?: number;

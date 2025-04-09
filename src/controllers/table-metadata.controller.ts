@@ -17,9 +17,10 @@ import {
 } from '@loopback/rest';
 import {writeFileSync} from 'fs';
 import {tmpdir} from 'os';
-import {join} from 'path';
+import {extname, join} from 'path';
 import {TableMetadata} from '../models';
 import {TableMetadataRepository} from '../repositories';
+import {TableMetadataImageRepository} from '../repositories/table-metadata-image.repository';
 import {CsvProcessorService} from '../services';
 import {S3Service} from '../services/s3-service.service';
 
@@ -33,7 +34,9 @@ export class TableMetadataController {
     private s3Service: S3Service,
     @inject(RestBindings.Http.RESPONSE) private response: Response,
     @repository(UserRepository)
-    public userRepository: UserRepository
+    public userRepository: UserRepository,
+    @repository(TableMetadataImageRepository)
+    public tableMetadataImageRepository: TableMetadataImageRepository,
   ) { }
 
   @post('/upload', {
@@ -81,11 +84,19 @@ export class TableMetadataController {
     @inject(RestBindings.Http.RESPONSE) response: Response
   ) {
     try {
-      if (!tableName.match(/^[a-zA-Z0-9_]+$/)) {
-        throw new Error('Invalid table name');
-      }
+      // if (!tableName.match(/^[a-zA-Z0-9_]+$/)) {
+      //   throw new Error('Invalid table name');
+      // }
 
-      const table = await this.tableMetadataRepository.findOne({where: {tableName}});
+      if (!tableName) {
+        throw new Error('Table name is required');
+      }
+      tableName = this.sanitizeTableName(tableName);
+      console.log("sanitizedTableName", tableName);
+
+      console.log("tablename", tableName);
+
+      const table = await this.tableMetadataRepository.findOne({where: {tableName: tableName.toLowerCase().trim()}});
       if (!table) {
         throw new Error('Table not found');
       }
@@ -138,6 +149,7 @@ export class TableMetadataController {
         },
       }
     })
+    @param.query.string('lang') lang: string,
     request: any,
   ): Promise<TableMetadata | any> {
 
@@ -146,14 +158,27 @@ export class TableMetadataController {
 
     try {
       // Extract file and fields data
-      const file = request.file;
-      // const files = request.files;
+      // const file = request.file;
+      const files = request.files;
       // const file = Array.isArray(files) ? files[0] : null;
+
+      // find out the file with ext csv
+      const file = files.find((file: any) => extname(file.originalname).toLowerCase() === '.csv');
+
+      if (!file) {
+        throw new Error('CSV file is required While Uploading New ');
+      }
+
+
+
+
       let fields = {
         tableName: request.body.tableName,
         dataFormat: JSON.parse(request.body.dataFormat || 'null'),
         title: request.body.title || null,
       };
+
+      this.sanitizeTableName(fields.tableName);
 
       if (!fields.dataFormat) {
 
@@ -190,7 +215,12 @@ export class TableMetadataController {
 
 
       // check table exist or not
-      const tableExist = await this.tableMetadataRepository.findOne({where: {tableName: fields.tableName}});
+      const tableExist = await this.tableMetadataRepository.findOne({
+        where: {
+          tableName: fields.tableName,
+          locale: lang || 'en',
+        }
+      });
       if (tableExist) {
         throw new Error('Table already exists');
       }
@@ -220,12 +250,46 @@ export class TableMetadataController {
 
 
       const metadata = await this.tableMetadataRepository.create({
-        tableName: fields.tableName.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, ''),
+        tableName: this.sanitizeTableName(fields.tableName),
+        // .replace(/[^a-zA-Z0-9_]/g, '') + (lang || 'en'),
         dataFormat,
         s3Url: s3Url,
         fileSize: fileSize.toString(),
         title: fields.title,
+        locale: lang || 'en'
       });
+
+
+      // check for images
+
+      if (Array.isArray(files)) {
+        for (const file of files) {
+
+          // check if the file is an image
+          const isImage = file.mimetype.startsWith('image/');
+          if (isImage) {
+            const imageKey = `uploaded-files/${Date.now()}-${file.originalname}`;
+
+            // store temporary image file
+            const tempImagePath = join(tmpdir(), `${Date.now()}-${file.originalname}`);
+            writeFileSync(tempImagePath, file.buffer);
+
+            const imageUrl = await this.s3Service.uploadFile(tempImagePath, imageKey);
+            console.log("imageurl", imageUrl);
+
+            await this.tableMetadataRepository.images(metadata.id).create({url: imageUrl, filename: file.originalname});
+
+            await this.tableMetadataImageRepository.create({
+              tableMetadataId: metadata.id,
+              imageId: file.id,
+            })
+
+          }
+
+
+        }
+      }
+
 
       // const metadata = await this.tableMetadataRepository.findById(1);
 
@@ -245,6 +309,8 @@ export class TableMetadataController {
 
   private async createDynamicTable(tableName: string, format: object) {
     const columns = this.generateColumnDefinitions(format);
+
+    console.log("tableName", tableName);
 
     // Ensure ID column is always included
     // columns.unshift("id INT AUTO_INCREMENT PRIMARY KEY");
@@ -276,9 +342,30 @@ export class TableMetadataController {
     return columns;
   }
 
+  // private sanitizeTableName(name: string): string {
+  //   return `"${name.toLowerCase().trim()}"`;
+  // }
+
   private sanitizeTableName(name: string): string {
-    return `"${name.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, '')}"`;
+
+    console.log("tablename", name);
+
+
+    const cleaned = name.trim().replace(/\s+/g, '_');
+
+    console.log("cleaned", cleaned);
+
+    // const isValid = /^[\p{L}\p{N}_]+$/u.test(cleaned);
+    // const isValid = /^[\p{Script_Extensions=Devanagari}\p{N}_]+$/u.test(cleaned);
+    const isValid = /^[\p{Script_Extensions=Devanagari}\p{Script=Latin}\p{N}_]+$/u.test(cleaned);
+    if (!isValid || cleaned === '') {
+      throw new Error('Invalid table name. Only letters, numbers, and underscores are allowed.');
+    }
+
+    return `${cleaned}`;
   }
+
+
 
   private sanitizeColumnName(name: string): string {
     return `"${name}"`;
@@ -361,8 +448,23 @@ export class TableMetadataController {
 
 
   @get('/table-metadata')
-  async getAllTables(): Promise<TableMetadata[]> {
-    return this.tableMetadataRepository.find();
+  async getAllTables(
+    @param.query.string('lang') lang: string,
+  ): Promise<TableMetadata[]> {
+    const metadata = await this.tableMetadataRepository.find({
+      where: {locale: lang ?? 'en'},
+      include: [{relation: 'images'}]
+    });
+    return metadata;
+  }
+
+  @get('/all-table-metadata')
+  async getAllTableMetadata(
+    @inject(RestBindings.Http.REQUEST) req: Request,
+  ): Promise<TableMetadata[]> {
+    return this.tableMetadataRepository.find({
+      include: [{relation: 'images'}]
+    });
   }
 
 
@@ -371,18 +473,19 @@ export class TableMetadataController {
     @param.path.string('tableName') tableName: string,
   ): Promise<object> {
 
-    // const sanitizeTableName = this.sanitizeTableName(tableName);
+    const sanitizeTableName = this.sanitizeTableName(tableName);
 
     if (!tableName) {
       throw new HttpErrors.BadRequest('Table name is required');
     }
 
-    const sanitizeTableName = tableName.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, '')
+    // const sanitizeTableName = tableName.toLowerCase().trim().replace(/[^a-zA-Z0-9_]/g, '')
 
     console.log("sanitizetable", sanitizeTableName);
 
     const metadata = await this.tableMetadataRepository.findOne({
       where: {tableName: sanitizeTableName},
+      include: [{relation: 'images'}]
     });
 
     console.log("metadata", metadata);
@@ -481,9 +584,18 @@ export class TableMetadataController {
 
     try {
       // Find existing metadata based on tableName
-      const tableMetadata = await this.tableMetadataRepository.findOne({where: {tableName}});
+      const tableMetadata = await this.tableMetadataRepository.findOne({
+        where: {tableName},
+        // include
+        //   : [{relation: 'images'}]
+      });
+
+
 
       console.log("tablefound", tableName)
+
+      console.log("files", request.files);
+      console.log("body", request.body);
 
 
 
@@ -503,6 +615,8 @@ export class TableMetadataController {
         // Check if new tableName is valid and not already in use
 
         console.log("table name modified")
+        console.log("old", tableMetadata.tableName);
+        console.log("new", updates.body.tableName);
 
 
 
@@ -521,66 +635,99 @@ export class TableMetadataController {
         tableMetadata.title = updates.body?.title;
       }
 
-      if (updates.file) {
-        // Process the new file, save it to temporary storage and upload to S3
-        // const files = updates.files;
-        // const file = Array.isArray(files) ? files[0] : null;
-        const file = updates.file;
-        if (file) {
-          const tempPath = join(tmpdir(), `${Date.now()}.csv`);
 
-          if (!file.buffer) {
-            throw new Error('File buffer is undefined');
+      if (updates?.files.length > 0) {
+        for (const file of updates.files) {
+
+
+          const ext = extname(file.originalname).toLowerCase();
+
+
+          if (ext === '.csv') {
+            // Process the new file, save it to temporary storage and upload to S3
+            // const files = updates.files;
+            // const file = Array.isArray(files) ? files[0] : null;
+            // const file = updates.file;
+            if (file) {
+              const tempPath = join(tmpdir(), `${Date.now()}.csv`);
+
+              if (!file.buffer) {
+                throw new Error('File buffer is undefined');
+              }
+              writeFileSync(tempPath, file.buffer);
+
+              // Process CSV and upload to S3
+              const {sanitizedData, dataFormat} = await this.csvProcessor.processCsv(tempPath);
+              const key = `csv-files/${Date.now()}-${tableMetadata.tableName}.csv`;
+              const s3Url = await this.s3Service.uploadFile(tempPath, key);
+
+              console.log("s3url", s3Url);
+
+
+              console.log("format", dataFormat);
+
+              // Update metadata with the new file information
+              tableMetadata.s3Url = s3Url;
+              tableMetadata.fileSize = file.size.toString();
+              tableMetadata.dataFormat = dataFormat;
+
+              // Update dynamic table with new data (assuming this step is needed)
+              // await this.createDynamicTable(tableMetadata.tableName, dataFormat);
+
+              console.log("oldformat", tableMetadataOld.dataFormat);
+              console.log("newformat", tableMetadata.dataFormat);
+
+              console.log("isEqual", await
+                this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat)
+              )
+
+
+              // let operationType = 'replace';
+
+              if (tableMetadata.tableName !== tableMetadataOld.tableName || !(await this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat))) {
+                console.log("table name or data format modified")
+
+                // drop the table and create new one
+                await this.tableMetadataRepository.dataSource.execute(`DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`);
+
+
+                await this.createDynamicTable(tableMetadata.tableName, dataFormat);
+              }
+              await this.insertDataIntoTable(tableMetadata.tableName, sanitizedData, 'replace');
+
+              console.log("file modified")
+
+            }
           }
-          writeFileSync(tempPath, file.buffer);
 
-          // Process CSV and upload to S3
-          const {sanitizedData, dataFormat} = await this.csvProcessor.processCsv(tempPath);
-          const key = `csv-files/${Date.now()}-${tableMetadata.tableName}.csv`;
-          const s3Url = await this.s3Service.uploadFile(tempPath, key);
+          else if (ext.startsWith('.jpg') || ext.startsWith('.png') || ext.startsWith('.jpeg')) {
+            // Process the image file and upload to S3
+            console.log('images', request.body.images);
+            const imageKey = `uploaded-files/${Date.now()}-${file.originalname}`;
+            const tempImagePath = join(tmpdir(), `${Date.now()}-${file.originalname}`);
+            writeFileSync(tempImagePath, file.buffer);
+            const imageUrl = await this.s3Service.uploadFile(tempImagePath, imageKey);
+            console.log("imageurl", imageUrl);
 
-          console.log("s3url", s3Url);
+            const imageCreated = await this.tableMetadataRepository.images(tableMetadata.id).create({url: imageUrl, filename: file.originalname});
 
+            await this.tableMetadataImageRepository.create({
+              tableMetadataId: tableMetadata.id,
+              imageId: imageCreated.id,
+            })
 
-          console.log("format", dataFormat);
-
-          // Update metadata with the new file information
-          tableMetadata.s3Url = s3Url;
-          tableMetadata.fileSize = file.size.toString();
-          tableMetadata.dataFormat = dataFormat;
-
-          // Update dynamic table with new data (assuming this step is needed)
-          // await this.createDynamicTable(tableMetadata.tableName, dataFormat);
-
-          console.log("oldformat", tableMetadataOld.dataFormat);
-          console.log("newformat", tableMetadata.dataFormat);
-
-          console.log("isEqual", await
-            this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat)
-          )
-
-
-          // let operationType = 'replace';
-
-          if (tableMetadata.tableName !== tableMetadataOld.tableName || !(await this.isEqual(tableMetadata.dataFormat, tableMetadataOld.dataFormat))) {
-            console.log("table name or data format modified")
-
-            // drop the table and create new one
-            await this.tableMetadataRepository.dataSource.execute(`DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`);
-
-
-            await this.createDynamicTable(tableMetadata.tableName, dataFormat);
           }
-          await this.insertDataIntoTable(tableMetadata.tableName, sanitizedData, 'replace');
+          else {
+            throw new Error('Invalid file type. Only CSV, JPG, PNG, and JPEG are allowed.');
+          }
 
-          console.log("file modified")
+
 
         }
       }
-
       // Save the updated metadata to the repository
 
-      console.log("tableMetadata", tableMetadata);
+      // console.log("tableMetadata", tableMetadata);
 
 
       const updatedMetadata = await this.tableMetadataRepository.save(tableMetadata);
@@ -604,11 +751,46 @@ export class TableMetadataController {
         //   const query = `DROP TABLE IF EXISTS ${tableMetadataOld.tableName}`;
         //   await this.tableMetadataRepository.dataSource.execute(query); // Execute raw SQL query
         // }
+
+
+        // unlink from the table metadata
+        if (updates?.body?.imagesRemovedId) {
+
+          if (Array.isArray(updates.body.imagesRemovedId)) {
+            for (const imageId of updates.body.imagesRemovedId) {
+              await this.tableMetadataImageRepository.deleteAll({imageId: imageId, tableMetadataId: tableMetadata.id});
+              console.log("image deleted from table metadata", imageId);
+            }
+          }
+          else {
+            await this.tableMetadataImageRepository.deleteAll({imageId: updates.body.imagesRemovedId, tableMetadataId: tableMetadata.id});
+            console.log("image deleted from table metadata", updates.body.imagesRemovedId);
+          }
+
+        }
+
+        // for images
+        // const imageKeys = tableMetadataOld?.images.map((image: any) => image.url.split('/').slice(-1)[0]);
+        // console.log("imagekeys", imageKeys);
+        // if (imageKeys) {
+        //   for (const imageKey of imageKeys) {
+        //     await this.s3Service.deleteFile(imageKey);
+        //     console.log("image deleted", imageKey);
+        //     // also unlink the image from the table metadata
+        //     await this.tableMetadataImageRepository.deleteAll({imageId: imageKey, tableMetadataId: tableMetadata.id});
+        //     console.log("image deleted from table metadata", imageKey);
+        //   }
+        // }
       }
 
       console.log("is it okay?")
 
-      return this.response.status(200).send({message: 'Table metadata updated successfully', metadata: updatedMetadata});
+      const updatedTableMetadata = await this.tableMetadataRepository.findOne({
+        where: {tableName: tableMetadata.tableName},
+        include: [{relation: 'images'}]
+      });
+
+      return this.response.status(200).send({message: 'Table metadata updated successfully', metadata: updatedTableMetadata});
     } catch (error) {
       return this.response.status(400).send({message: error.message});
     }

@@ -29,6 +29,7 @@ export class CsvProcessorService {
     }
 
     // Generate data format from CSV headers
+    console.log("records", records);
     const dataFormat = this.generateDataFormat(records[0]);
 
     console.log("dataformatfromcsv", dataFormat);

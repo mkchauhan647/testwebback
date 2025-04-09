@@ -1,4 +1,6 @@
-import {model, property} from '@loopback/repository';
+import {hasMany, model, property} from '@loopback/repository';
+import {Image} from './image.model';
+import {TableMetadataImage} from './table-metadata-image.model';
 import {UserModifiableEntity} from './user-modifiable-entity.model';
 
 @model()
@@ -16,6 +18,13 @@ export class TableMetadata extends UserModifiableEntity {
     index: true,
   })
   tableName: string;
+
+
+  @property({
+    type: 'string',
+    default: 'en',
+  })
+  locale?: string;
 
   @property({
     type: "string",
@@ -39,6 +48,9 @@ export class TableMetadata extends UserModifiableEntity {
   })
   fileSize?: string;
 
+
+  @hasMany(() => Image, {through: {model: () => TableMetadataImage}})
+  images?: Image[];
 
 
   // @belongsTo(() => User, {name: 'user', keyTo: 'id'})

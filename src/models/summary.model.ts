@@ -5,8 +5,22 @@ import {UserModifiableEntity} from './user-modifiable-entity.model';
 
 @model({
   name: 'summary',
+  // settings: {
+  // hiddenProperties: [...hiddenProperties],
+  // }
   settings: {
     hiddenProperties: [...hiddenProperties],
+    indexes: {
+      uniqueSummaryPerLocale: {
+        keys: {
+          tenantId: 1,
+          locale: 1
+        },
+        options: {
+          unique: true
+        }
+      }
+    }
   }
 })
 export class Summary extends UserModifiableEntity {
@@ -45,6 +59,12 @@ export class Summary extends UserModifiableEntity {
     default: () => new Date(),
   })
   createdAt?: Date;
+
+  @property({
+    type: 'string',
+    default: 'en'
+  })
+  locale?: string;
 
   @property({
     type: 'date',

@@ -40,6 +40,8 @@ export class FileManagement extends UserModifiableEntity {
   @belongsTo(() => Tenant, {name: 'tenant', keyTo: "id"})
   tenantId?: number;
 
+
+
   constructor(data?: Partial<FileManagement>) {
     super(data);
   }

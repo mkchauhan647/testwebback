@@ -54,9 +54,11 @@ export class MySequence implements SequenceHandler {
       console.log('Authenticated user:', user);
 
       if (
-        route.path.startsWith('/footers/') &&
+
+        this.routeCheckerforMultiUpload(route.path) &&
         (request.method === 'POST' || request.method === 'PATCH')
       ) {
+        console.log("I am running?")
         await this.applyMulterMiddleware(request, response, true);
       }
       else {
@@ -90,6 +92,19 @@ export class MySequence implements SequenceHandler {
       this.reject(context, err);
     }
   }
+
+
+  private routeCheckerforMultiUpload(route: string) {
+    const multerRoutes = [
+      '/table-metadata',
+      '/footers',
+    ];
+
+    return multerRoutes.some(multerRoute => route.startsWith(multerRoute));
+  }
+
+
+
 
   private async applyMulterMiddleware(request: any, response: any, isMulti: boolean = false) {
     if (isMulti) {

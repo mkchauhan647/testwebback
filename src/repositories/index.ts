@@ -11,3 +11,4 @@ export * from './file-management.repository';
 export * from './footer.repository';
 export * from './summary.repository';
 
+export * from './image.repository';
