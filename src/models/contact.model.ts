@@ -50,6 +50,12 @@ export class Contact extends UserModifiableEntity {
   })
   socialMediaLinks: string[];
 
+  @property({
+    type: 'string',
+    default: 'en'
+  })
+  locale?: string;
+
   @belongsTo(() => Tenant, {name: 'tenant', keyTo: "id"})
   tenantId?: number;
 

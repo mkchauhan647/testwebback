@@ -96,7 +96,7 @@ export class AuthService {
 
 
 
-  async getTenantId(): Promise<string | null> {
+  async getTenantId(): Promise<number | null> {
     if (this.currentUser && this.currentUser.tenantId) {
       return this.currentUser.tenantId;
     }
