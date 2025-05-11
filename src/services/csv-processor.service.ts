@@ -15,11 +15,31 @@ export class CsvProcessorService {
     console.log("existingformat", existingFormat);
 
 
-    const csvContent = readFileSync(filePath, 'utf-8');
+    // const csvContent = readFileSync(filePath, 'utf-8');
+
+    const csvContent = readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, '');
     const records = parse(csvContent, {
       columns: true,
       skip_empty_lines: true,
     });
+
+
+
+    // const rawRecords = parse(csvContent, {
+    //   columns: true,
+    //   skip_empty_lines: true,
+    // });
+
+    // const records = rawRecords.map((record: any) => {
+    //   const cleaned: any = {};
+    //   for (const key in record) {
+    //     const cleanKey = key.replace(/^\uFEFF/, '');
+    //     cleaned[cleanKey] = record[key];
+    //   }
+    //   return cleaned;
+    // });
+
+
 
     if (existingFormat) {
       return {
